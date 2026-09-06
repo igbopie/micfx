@@ -135,6 +135,12 @@ Hecho 2026-09-05 (todo por SSH directo, sin sudo en la Pi):
   0.84 + 2 allpass 0.5, buffers estáticos ~115 KB). Sends por canal y
   `reverb_amount`, wet sumado pre-master. `test_rev`: `REV_OK`
   (amount=0 mudo, cola que decae y acotada). Commit `eb2b2b2`.
+- Etapa 8 (delay opcional): eco mono con feedback, hasta 1 s, `mix=0` =
+  bypass. `test_dly`: `DLY_OK` (ecos 0.5/0.25 exactos).
+- Etapa 9 (limiter final): brickwall a `limiter_threshold`, última etapa
+  tras el master. `test_lim`: `LIM_OK`. Cadena completa:
+  HPF → comp → EQ → mix → reverb → delay → master → limiter.
+  Commit `bde432e`. Suite 7/7 en verde, cero warnings.
 - Etapa 5 (EQ) implementada sin hardware: `eq3_t` en `dsp.h`
   (low-shelf 250 Hz, pico 1 kHz Q=1, high-shelf 4 kHz, RBJ).
   Verificado con `src/test_eq.c`: flat 0.5000 exacto, boosts +6 dB
