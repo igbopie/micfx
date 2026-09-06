@@ -7,7 +7,7 @@
 #include <math.h>
 
 typedef struct {
-    float b0, b1, b2, a1, a2; /* a0 normalizado a 1 */
+    float b0, b1, b2, a1, a2; /* a0 normalized to 1 */
     float x1, x2, y1, y2;     /* estado */
 } hpf_t;
 
