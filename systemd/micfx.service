@@ -1,0 +1,15 @@
+[Unit]
+Description=micfx — procesador de voz (2 mics)
+After=sound.target
+Wants=sound.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/micfx -c /etc/micfx/micfx.conf
+Restart=on-failure
+RestartSec=2
+# Tiempo real blando: prioridad y memoria bloqueada (ajustar tras medir)
+LimitMEMLOCK=infinity
+
+[Install]
+WantedBy=multi-user.target
