@@ -15,6 +15,7 @@
 
 static float g_mic1 = 1.0f, g_mic2 = 1.0f, g_master = 1.0f, g_hpf = 0.0f;
 static float g_c_thr = 1.0f, g_c_ratio = 1.0f, g_c_atk = 0.005f, g_c_rel = 0.100f;
+static float g_eq_low = 0.0f, g_eq_mid = 0.0f, g_eq_high = 0.0f;
 
 static void load_conf(const char *path) {
     FILE *f = fopen(path, "r");
@@ -30,6 +31,9 @@ static void load_conf(const char *path) {
         else if (!strcmp(k, "compressor_ratio")) g_c_ratio = v;
         else if (!strcmp(k, "compressor_attack")) g_c_atk = v;
         else if (!strcmp(k, "compressor_release")) g_c_rel = v;
+        else if (!strcmp(k, "eq_low")) g_eq_low = v;
+        else if (!strcmp(k, "eq_mid")) g_eq_mid = v;
+        else if (!strcmp(k, "eq_high")) g_eq_high = v;
     }
     fclose(f);
     printf("gains: mic1=%.3f mic2=%.3f master=%.3f hpf=%.1f Hz comp=%.3f:%.1f atk=%.4f rel=%.3f\n",
@@ -77,6 +81,9 @@ int main(int argc, char **argv) {
     comp_t comp1, comp2;
     comp_init(&comp1, g_c_thr, g_c_ratio, g_c_atk, g_c_rel, (float)rate);
     comp_init(&comp2, g_c_thr, g_c_ratio, g_c_atk, g_c_rel, (float)rate);
+    eq3_t eq1, eq2;
+    eq3_init(&eq1, g_eq_low, g_eq_mid, g_eq_high, (float)rate);
+    eq3_init(&eq2, g_eq_low, g_eq_mid, g_eq_high, (float)rate);
     long xr_c = 0, xr_p = 0, total = 0;
     for (;;) {
         snd_pcm_sframes_t r = snd_pcm_readi(cap, buf, bp);
@@ -87,6 +94,8 @@ int main(int argc, char **argv) {
             if (use_hpf) { l = hpf_run(&hpf1, l); rr = hpf_run(&hpf2, rr); }
             l = comp_run(&comp1, l / 32768.0f) * 32768.0f; /* comp en [-1,1] */
             rr = comp_run(&comp2, rr / 32768.0f) * 32768.0f;
+            l = eq3_run(&eq1, l / 32768.0f) * 32768.0f; /* EQ en [-1,1] */
+            rr = eq3_run(&eq2, rr / 32768.0f) * 32768.0f;
             l *= g_mic1 * g_master;
             rr *= g_mic2 * g_master;
             if (l > 32767) l = 32767;

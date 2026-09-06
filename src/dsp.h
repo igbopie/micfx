@@ -58,4 +58,77 @@ static inline float comp_run(comp_t *c, float x) {
     return x * (target / c->env);
 }
 
+/* EQ de 3 bandas por canal: low-shelf 250 Hz, pico 1 kHz (Q=1),
+ * high-shelf 4 kHz (RBJ cookbook). Ganancias en dB; 0 dB = pasa-todo.
+ */
+typedef struct {
+    float b0, b1, b2, a1, a2;
+    float x1, x2, y1, y2;
+} bq_t;
+
+static inline void bq_norm(bq_t *f, float b0, float b1, float b2,
+                           float a0, float a1, float a2) {
+    f->b0 = b0 / a0; f->b1 = b1 / a0; f->b2 = b2 / a0;
+    f->a1 = a1 / a0; f->a2 = a2 / a0;
+    f->x1 = f->x2 = f->y1 = f->y2 = 0.0f;
+}
+
+static inline void bq_low_shelf(bq_t *f, float fc, float db, float rate) {
+    float A = powf(10.0f, db / 40.0f);
+    float w0 = 6.283185307179586f * fc / rate;
+    float c = cosf(w0), s = sinf(w0);
+    float alpha = s / 2.0f * sqrtf(2.0f); /* S=1 */
+    float sqA = sqrtf(A);
+    bq_norm(f, A * ((A + 1) - (A - 1) * c + 2 * sqA * alpha),
+               2 * A * ((A - 1) - (A + 1) * c),
+               A * ((A + 1) - (A - 1) * c - 2 * sqA * alpha),
+               (A + 1) + (A - 1) * c + 2 * sqA * alpha,
+               -2 * ((A - 1) + (A + 1) * c),
+               (A + 1) + (A - 1) * c - 2 * sqA * alpha);
+}
+
+static inline void bq_high_shelf(bq_t *f, float fc, float db, float rate) {
+    float A = powf(10.0f, db / 40.0f);
+    float w0 = 6.283185307179586f * fc / rate;
+    float c = cosf(w0), s = sinf(w0);
+    float alpha = s / 2.0f * sqrtf(2.0f); /* S=1 */
+    float sqA = sqrtf(A);
+    bq_norm(f, A * ((A + 1) + (A - 1) * c + 2 * sqA * alpha),
+               -2 * A * ((A - 1) + (A + 1) * c),
+               A * ((A + 1) + (A - 1) * c - 2 * sqA * alpha),
+               (A + 1) - (A - 1) * c + 2 * sqA * alpha,
+               2 * ((A - 1) - (A + 1) * c),
+               (A + 1) - (A - 1) * c - 2 * sqA * alpha);
+}
+
+static inline void bq_peak(bq_t *f, float fc, float db, float Q, float rate) {
+    float A = powf(10.0f, db / 40.0f);
+    float w0 = 6.283185307179586f * fc / rate;
+    float c = cosf(w0), s = sinf(w0);
+    float alpha = s / 2.0f / Q;
+    bq_norm(f, 1 + alpha * A, -2 * c, 1 - alpha * A,
+               1 + alpha / A, -2 * c, 1 - alpha / A);
+}
+
+static inline float bq_run(bq_t *f, float x) {
+    float y = f->b0 * x + f->b1 * f->x1 + f->b2 * f->x2
+              - f->a1 * f->y1 - f->a2 * f->y2;
+    f->x2 = f->x1; f->x1 = x;
+    f->y2 = f->y1; f->y1 = y;
+    return y;
+}
+
+typedef struct { bq_t low, mid, high; } eq3_t;
+
+static inline void eq3_init(eq3_t *e, float low_db, float mid_db,
+                            float high_db, float rate) {
+    bq_low_shelf(&e->low, 250.0f, low_db, rate);
+    bq_peak(&e->mid, 1000.0f, mid_db, 1.0f, rate);
+    bq_high_shelf(&e->high, 4000.0f, high_db, rate);
+}
+
+static inline float eq3_run(eq3_t *e, float x) {
+    return bq_run(&e->high, bq_run(&e->mid, bq_run(&e->low, x)));
+}
+
 #endif
