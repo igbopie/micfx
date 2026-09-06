@@ -2,7 +2,10 @@ CC = gcc
 CFLAGS = -O2 -Wall -Wextra
 LDLIBS = -lasound -lm
 
-all: tone micfx test_hpf test_comp test_eq test_mix test_rev test_dly test_lim
+all: tone micfx bench test_hpf test_comp test_eq test_mix test_rev test_dly test_lim
+
+bench: bench.c dsp.h
+	$(CC) $(CFLAGS) -o $@ bench.c -lm
 
 test_hpf: test_hpf.c dsp.h
 	$(CC) $(CFLAGS) -o $@ test_hpf.c -lm
@@ -32,4 +35,4 @@ micfx: passthrough.c
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $< $(LDLIBS)
 
 clean:
-	rm -f tone micfx test_hpf test_comp test_eq test_mix test_rev test_dly test_lim
+	rm -f tone micfx bench test_hpf test_comp test_eq test_mix test_rev test_dly test_lim
