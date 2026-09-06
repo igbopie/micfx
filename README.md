@@ -127,6 +127,11 @@ Hecho 2026-09-05 (todo por SSH directo, sin sudo en la Pi):
   ratio 4:1 → 0.330 (teoría 0.3125, tolerancia ±10 %); bajo umbral intacto;
   bypass bit-exacto. `COMP_OK`. Integrado en `micfx` tras el HPF, trabaja
   en [−1,1] (normalizado desde S16).
+- Etapa 5 (EQ) implementada sin hardware: `eq3_t` en `dsp.h`
+  (low-shelf 250 Hz, pico 1 kHz Q=1, high-shelf 4 kHz, RBJ).
+  Verificado con `src/test_eq.c`: flat 0.5000 exacto, boosts +6 dB
+  (≈×2) solo en su banda, resto intacto. `EQ_OK`. Cadena actual:
+  HPF → comp → EQ → gains. Commits: `aff5b4d` (etapas 1–4), `420ba95` (etapa 5).
 - Pendiente: el usuario conectará su interfaz M-Audio por USB; entonces
   reescaneo (`arecord -l`), elección de `hw:X,Y` y test full-duplex.
 
