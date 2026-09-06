@@ -165,4 +165,59 @@ static inline void mix_out(float l, float r, float master, float *ol, float *or_
     *ol = m; *or_ = m;
 }
 
+/* Etapa 7: reverb compartida tipo Schroeder (mono).
+ * 4 combs en paralelo + 2 allpass en serie. Buffers estáticos
+ * (hasta 50 ms @ 96 kHz): sin malloc, apta para realtime.
+ * amount = nivel wet (0 = solo dry). Estable con fb < 1.
+ */
+#define REV_MAXD 4800
+
+typedef struct { float buf[REV_MAXD]; int len, idx; } dline_t;
+
+static inline float comb_run(dline_t *d, float x, float fb) {
+    float y = d->buf[d->idx];
+    d->buf[d->idx] = x + y * fb;
+    if (++d->idx >= d->len) d->idx = 0;
+    return y;
+}
+
+static inline float ap_run(dline_t *d, float x, float fb) {
+    float dl = d->buf[d->idx];
+    float y = -fb * x + dl;
+    d->buf[d->idx] = x + fb * y;
+    if (++d->idx >= d->len) d->idx = 0;
+    return y;
+}
+
+typedef struct {
+    dline_t comb[4];
+    dline_t ap[2];
+    float amount;
+} reverb_t;
+
+static inline void dline_reset(dline_t *d, int len) {
+    d->len = len < REV_MAXD ? len : REV_MAXD;
+    d->idx = 0;
+    for (int i = 0; i < d->len; i++) d->buf[i] = 0.0f;
+}
+
+static inline void reverb_init(reverb_t *r, float amount, float rate) {
+    float k = rate / 48000.0f;
+    /* retardos estilo Freeverb, escalados por frecuencia de muestreo */
+    const int cl[4] = { 1557, 1617, 1491, 1422 };
+    const int al[2] = { 556, 441 };
+    for (int i = 0; i < 4; i++) dline_reset(&r->comb[i], (int)(cl[i] * k));
+    for (int i = 0; i < 2; i++) dline_reset(&r->ap[i], (int)(al[i] * k));
+    r->amount = amount;
+}
+
+static inline float reverb_wet(reverb_t *r, float x) {
+    float y = 0.0f;
+    for (int i = 0; i < 4; i++) y += comb_run(&r->comb[i], x, 0.84f);
+    y *= 0.25f;
+    y = ap_run(&r->ap[0], y, 0.5f);
+    y = ap_run(&r->ap[1], y, 0.5f);
+    return y;
+}
+
 #endif

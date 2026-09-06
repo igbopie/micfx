@@ -16,6 +16,7 @@
 static float g_mic1 = 1.0f, g_mic2 = 1.0f, g_master = 1.0f, g_hpf = 0.0f;
 static float g_c_thr = 1.0f, g_c_ratio = 1.0f, g_c_atk = 0.005f, g_c_rel = 0.100f;
 static float g_eq_low = 0.0f, g_eq_mid = 0.0f, g_eq_high = 0.0f;
+static float g_rev_s1 = 0.0f, g_rev_s2 = 0.0f, g_rev_amt = 0.0f;
 
 static void load_conf(const char *path) {
     FILE *f = fopen(path, "r");
@@ -34,11 +35,15 @@ static void load_conf(const char *path) {
         else if (!strcmp(k, "eq_low")) g_eq_low = v;
         else if (!strcmp(k, "eq_mid")) g_eq_mid = v;
         else if (!strcmp(k, "eq_high")) g_eq_high = v;
+        else if (!strcmp(k, "reverb_send_1")) g_rev_s1 = v;
+        else if (!strcmp(k, "reverb_send_2")) g_rev_s2 = v;
+        else if (!strcmp(k, "reverb_amount")) g_rev_amt = v;
     }
     fclose(f);
     printf("gains: mic1=%.3f mic2=%.3f master=%.3f hpf=%.1f Hz comp=%.3f:%.1f atk=%.4f rel=%.3f\n",
            g_mic1, g_mic2, g_master, g_hpf,
            g_c_thr, g_c_ratio, g_c_atk, g_c_rel);
+    printf("reverb: send1=%.2f send2=%.2f amount=%.2f\n", g_rev_s1, g_rev_s2, g_rev_amt);
 }
 
 static int setup(snd_pcm_t **h, const char *dev, int cap, unsigned rate) {
@@ -81,6 +86,8 @@ int main(int argc, char **argv) {
               g_eq_low, g_eq_mid, g_eq_high, g_mic1, frate);
     chan_init(&ch2, g_hpf, g_c_thr, g_c_ratio, g_c_atk, g_c_rel,
               g_eq_low, g_eq_mid, g_eq_high, g_mic2, frate);
+    static reverb_t rev; /* ~115 KB estáticos: fuera del stack */
+    reverb_init(&rev, g_rev_amt, frate);
     long xr_c = 0, xr_p = 0, total = 0;
     for (;;) {
         snd_pcm_sframes_t r = snd_pcm_readi(cap, buf, bp);
@@ -89,8 +96,10 @@ int main(int argc, char **argv) {
         for (snd_pcm_sframes_t i = 0; i < r; i++) {
             float l = chan_run(&ch1, buf[2 * i] / 32768.0f);
             float rr = chan_run(&ch2, buf[2 * i + 1] / 32768.0f);
-            float ol, orr;
-            mix_out(l, rr, g_master, &ol, &orr);
+            float dry = (l + rr) * 0.5f; /* etapa 6: mezcla */
+            float wet = reverb_wet(&rev, g_rev_s1 * l + g_rev_s2 * rr);
+            float ol = (dry + rev.amount * wet) * g_master;
+            float orr = ol;
             if (ol > 1.0f) ol = 1.0f;
             if (ol < -1.0f) ol = -1.0f;
             if (orr > 1.0f) orr = 1.0f;
