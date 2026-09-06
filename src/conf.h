@@ -14,6 +14,7 @@ typedef struct {
     float rev_s1, rev_s2, rev_amt;
     float dly_ms, dly_fb, dly_mix;
     float lim_thr;
+    float music;
 } conf_t;
 
 static inline void conf_defaults(conf_t *c) {
@@ -23,6 +24,7 @@ static inline void conf_defaults(conf_t *c) {
     c->rev_s1 = 0.0f; c->rev_s2 = 0.0f; c->rev_amt = 0.0f;
     c->dly_ms = 0.0f; c->dly_fb = 0.0f; c->dly_mix = 0.0f;
     c->lim_thr = 1.0f;
+    c->music = 0.0f;
 }
 
 /* Returns 1 if the file was opened, 0 if missing (uses defaults). */
@@ -50,6 +52,7 @@ static inline int conf_load(conf_t *c, const char *path) {
         else if (!strcmp(k, "delay_feedback")) c->dly_fb = v;
         else if (!strcmp(k, "delay_mix")) c->dly_mix = v;
         else if (!strcmp(k, "limiter_threshold")) c->lim_thr = v;
+        else if (!strcmp(k, "music_gain")) c->music = v;
     }
     fclose(f);
     return 1;
@@ -63,6 +66,7 @@ static inline void conf_print(const conf_t *c) {
            c->rev_s1, c->rev_s2, c->rev_amt);
     printf("delay: %.1f ms fb=%.2f mix=%.2f | limiter: thr=%.3f\n",
            c->dly_ms, c->dly_fb, c->dly_mix, c->lim_thr);
+    printf("music: gain=%.3f\n", c->music);
 }
 
 #endif

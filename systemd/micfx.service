@@ -5,8 +5,9 @@ Wants=sound.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/micfx -c /etc/micfx/micfx.conf
-Restart=on-failure
+User=igbopie
+ExecStart=/usr/local/bin/micfx -C hw:CARD=CODEC -P hw:CARD=CODEC -M bluealsa:PROFILE=a2dp -c /etc/micfx/micfx.conf
+Restart=always
 RestartSec=2
 # Soft realtime: priority and locked memory (tune after measuring)
 LimitMEMLOCK=infinity
