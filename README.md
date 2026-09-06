@@ -127,6 +127,10 @@ Hecho 2026-09-05 (todo por SSH directo, sin sudo en la Pi):
   ratio 4:1 → 0.330 (teoría 0.3125, tolerancia ±10 %); bajo umbral intacto;
   bypass bit-exacto. `COMP_OK`. Integrado en `micfx` tras el HPF, trabaja
   en [−1,1] (normalizado desde S16).
+- Etapa 6 (mezcla) + refactor: `chan_t` en `dsp.h` encapsula la cadena
+  por canal; `mix_out` promedia a mono dual con master. `micfx` emite
+  L=R=mezcla con clip en [−1,1]. Verificado con `src/test_mix.c`
+  (`MIX_OK`, valores exactos). Commit `9e3d04e`.
 - Etapa 5 (EQ) implementada sin hardware: `eq3_t` en `dsp.h`
   (low-shelf 250 Hz, pico 1 kHz Q=1, high-shelf 4 kHz, RBJ).
   Verificado con `src/test_eq.c`: flat 0.5000 exacto, boosts +6 dB
