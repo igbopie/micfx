@@ -1,10 +1,10 @@
-# micfx — Procesador de voz portátil (Raspberry Pi 3)
+# micfx — Portable voice processor (Raspberry Pi 3)
 
-Contexto para retomar el trabajo en futuras sesiones (Muse Code).
+Context to resume work in future sessions (Muse Code).
 
-## Objetivo final
+## Final goal
 
-Receptor + DSP en tiempo real para dos micrófonos inalámbricos, sin monitor/teclado/GUI, alimentado por USB/batería.
+Receiver + realtime DSP for two wireless microphones, no monitor/keyboard/GUI, USB/battery powered.
 
 ```text
 Mic 1 wireless receiver → Audio Input L ─┐
@@ -12,9 +12,9 @@ Mic 1 wireless receiver → Audio Input L ─┐
 Mic 2 wireless receiver → Audio Input R ─┘
 ```
 
-Cada micrófono se mantiene como canal independiente durante el procesado.
+Each microphone stays an independent channel through processing.
 
-Cadena por canal: `High-pass → Compressor → EQ`, luego:
+Per-channel chain: `High-pass → Compressor → EQ`, then:
 
 ```text
 MIC 1 → HPF → Comp → EQ ─┐
@@ -22,42 +22,47 @@ MIC 1 → HPF → Comp → EQ ─┐
 MIC 2 → HPF → Comp → EQ ─┘
 ```
 
-## Estado actual (2026-09-05)
+## Current status (2026-09-05)
 
-- Raspberry Pi 3 con Raspberry Pi OS Lite, SSH funcionando.
-- Sesión de desarrollo desde Mac (`/Users/nacho/git/micfx`).
-- Acceso SSH directo: **funciona** desde sesión con sandbox desactivado
-  (verificado 2026-09-05): `ssh -i ~/.ssh/muse_karaoke igbopie@192.168.1.137`.
-  Clave dedicada `~/.ssh/muse_karaoke` (pub ya en `authorized_keys` de la Pi).
-  Nota histórica: con sandbox activado era imposible (`Operation not permitted`).
-- Pi: usuario `igbopie`, IP `192.168.1.137` (DHCP, puede cambiar), hostname `karaoke`.
-- Fase: prototipado rápido por SSH. **No** Buildroot ni bare-metal.
-- Hardware de audio definitivo **sin decidir**.
-- No se ha instalado ni construido nada de DSP todavía.
+- Raspberry Pi 3 running Raspberry Pi OS Lite, SSH working.
+- Dev session from Mac (`/Users/nacho/git/micfx`).
+- Direct SSH access: **works** from a sandbox-disabled session
+  (verified 2026-09-05): `ssh -i ~/.ssh/muse_karaoke igbopie@192.168.1.137`.
+  Dedicated key `~/.ssh/muse_karaoke` (pub already in the Pi's `authorized_keys`).
+  Historical note: with the sandbox enabled it was impossible (`Operation not permitted`).
+- Pi: user `igbopie`, IP `192.168.1.137` (DHCP, may change), hostname `karaoke`.
+- Phase: fast prototyping over SSH. **No** Buildroot or bare-metal.
+- Capture hardware: user's M-Audio USB interface (not plugged in yet).
+- sudo on the Pi: user granted `NOPASSWD` for
+  `/usr/bin/apt, /usr/bin/apt-get, /usr/bin/dpkg` (`/etc/sudoers.d/`).
 
-## Restricciones
+## Constraints
 
-- No instalar escritorio ni dependencias gráficas. Solo dependencias necesarias.
-- Usar ALSA directamente salvo ventaja concreta de JACK/PipeWire/Carla (debe justificarse).
-- DSP definitivo: un único proceso ligero, C o C++, ALSA, 48 kHz, buffers pequeños, float32 interno, sin GUI, sin Python en el audio realtime path.
-- Latencia objetivo inicial: round-trip **<10 ms** si el hardware lo permite.
-- El callback/loop realtime no debe hacer: allocations, logging pesado, acceso a disco ni operaciones bloqueantes. Robusto ante xruns.
+- No desktop or graphical dependencies. Only required dependencies.
+- Use ALSA directly unless a concrete JACK/PipeWire/Carla advantage justifies it.
+- Final DSP: a single lightweight process, C or C++, ALSA, 48 kHz, small buffers,
+  internal float32, no GUI, no Python in the realtime audio path.
+- Initial latency target: round-trip **<10 ms** if the hardware allows it.
+- The realtime callback/loop must not: allocate, log heavily, touch disk, or block.
+  Robust against xruns.
 
-## Prototipo DSP (secuencial, con gates)
+## DSP prototype (sequential, with gates)
 
-No pasar a la etapa N+1 hasta comprobar CPU, xruns y latencia de la etapa N:
+Don't move to stage N+1 until CPU, xruns and latency of stage N are verified:
 
 1. Audio passthrough
-2. Gain independiente CH1/CH2
-3. High-pass por canal (~80–100 Hz)
-4. Compressor independiente por canal
-5. EQ sencillo
-6. Mezcla de los dos canales
-7. Reverb compartida (send)
-8. Delay/echo opcional
-9. Limiter final
+2. Independent CH1/CH2 gain
+3. Per-channel high-pass (~80–100 Hz)
+4. Independent per-channel compressor
+5. Simple EQ
+6. Mix of both channels
+7. Shared reverb (send)
+8. Optional delay/echo
+9. Final limiter
 
-## Parámetros (editables sin recompilar; fichero primero, potenciómetros/encoders después)
+All 9 stages are implemented and verified offline (see Phase 2 below).
+
+## Parameters (editable without recompiling; file first, pots/encoders later)
 
 ```text
 mic1_gain, mic2_gain
@@ -69,118 +74,90 @@ delay_ms, delay_feedback, delay_mix
 master_gain, limiter_threshold
 ```
 
-## Deployment objetivo
+## Target deployment
 
-- Servicio systemd `micfx`: arranque automático, restart automático si falla.
-- SSH disponible durante el desarrollo. Sin desktop.
+- systemd service `micfx`: autostart, automatic restart on failure.
+- SSH available during development. No desktop.
 
 ```text
 POWER ON → Linux boot → ALSA → micfx service → Audio processing active
 ```
 
-## Prioridades (en orden)
+## Priorities (in order)
 
-1. Latencia 2. Estabilidad / sin clicks ni xruns 3. Calidad de voz
-4. Bajo consumo CPU 5. Arranque sencillo 6. Tamaño mínimo del sistema
+1. Latency 2. Stability / no clicks or xruns 3. Voice quality
+4. Low CPU usage 5. Simple boot 6. Minimal system size
 
-No optimizar prematuramente ni añadir software innecesario.
+No premature optimization, no unnecessary software.
 
-## Forma de trabajar acordada
+## Agreed way of working
 
-- Incremental. Antes de cambios importantes: inspeccionar estado, explicar hallazgo, decir qué/cambiar por qué.
-- Después de cada etapa: comando exacto de prueba, resultado esperado, medición CPU/xruns/latencia, y forma de rollback.
+- Incremental. Before major changes: inspect state, explain findings, say what/to change and why.
+- After each stage: exact test command, expected result, CPU/xrun/latency measurement, and rollback path.
 
-## Fase 1 (COMPLETADA 2026-09-05): plataforma de baja latencia + qué audio detecta la Pi
+## Phase 1 (DONE 2026-09-05): low-latency platform + what audio the Pi sees
 
-Resultado (salida completa verificada por SSH directo):
+Result (full output verified over direct SSH):
 - Pi 3 Model B Rev 1.2, Debian 13 trixie, kernel 6.18.34+rpt-rpi-v8 aarch64,
-  `SMP PREEMPT` (no RT, no `/sys/kernel/realtime`).
-- Solo playback: card 0 `bcm2835 Headphones` (8 subdev), card 1 `vc4-hdmi`.
-  **Cero dispositivos de captura** (`arecord -l` vacío).
-- `lsusb`: solo hub + Ethernet. Ningún interfaz USB/I2S de audio conectado.
-- `dtparam=audio=on`, `dtparam=i2s=on` comentado.
+  `SMP PREEMPT` (not RT, no `/sys/kernel/realtime`).
+- Playback only: card 0 `bcm2835 Headphones` (8 subdevs), card 1 `vc4-hdmi`.
+  **Zero capture devices** (`arecord -l` empty).
+- `lsusb`: hub + Ethernet only. No USB/I2S audio interface connected.
+- `dtparam=audio=on`, `dtparam=i2s=on` commented out.
 
-## Fase 2 (EN CURSO): plataforma base + hardware de captura
+## Phase 2 (IN PROGRESS): base platform + capture hardware
 
-Hecho 2026-09-05 (todo por SSH directo, sin sudo en la Pi):
-- Repo: `src/tone.c` (test playback), `src/passthrough.c` (etapa 1 DSP),
+Done 2026-09-05 (all over direct SSH):
+- Repo: `src/tone.c` (playback test), `src/passthrough.c` (DSP stages),
   `src/Makefile`, `config/micfx.conf`, `systemd/micfx.service`, `tools/xrun_test.sh`.
-- Acceso sudo en la Pi: el usuario dio `NOPASSWD` para
-  `/usr/bin/apt, /usr/bin/apt-get, /usr/bin/dpkg` (`/etc/sudoers.d/`).
-  Instalado `libasound2-dev` vía apt (antes: headers extraídos sin root
-  a `~/micfx/sysroot`, ya innecesario).
-- Build en la Pi (`~/micfx/src`, `make` a secas). Cero warnings con
+- Installed `libasound2-dev` via apt.
+- Build on the Pi (`~/micfx/src`, plain `make`). Zero warnings with
   `-Wall -Wextra`.
-- Línea base playback (`hw:0,0` Headphones, 48 kHz S16 estéreo, buffer 20 ms,
-  periodo real 480): **10 s, 0 xruns, CPU 2.4 %**. Con buffer de 5 ms:
-  499 underruns (esperable; el gate es 0 xruns con buffer ≥20 ms).
-- Etapa 3 (HPF) implementada sin hardware: `src/dsp.h` (biquad RBJ),
-  integrado por canal en `micfx` (`hpf_frequency`, 0 = bypass).
-  Verificado offline en la Pi con `src/test_hpf.c`: fc=100 Hz →
-  50 Hz a −12.3 dB (teoría −12.0), 1 kHz a 0.0 dB. `HPF_OK`.
-  De paso cazó un bug real: el parser de config se atascaba en los
-  comentarios (`fscanf`); ahora lee por líneas con `fgets`+`sscanf`.
-- Etapa 4 (compresor) implementada sin hardware: `comp_t` en `dsp.h`
-  (seguidor de pico + attack/release exponenciales, curva umbral/ratio en
-  lineal, estado independiente por canal, ratio ≤1 = bypass).
-  Verificado offline con `src/test_comp.c`: entrada 0.5 con umbral 0.25 y
-  ratio 4:1 → 0.330 (teoría 0.3125, tolerancia ±10 %); bajo umbral intacto;
-  bypass bit-exacto. `COMP_OK`. Integrado en `micfx` tras el HPF, trabaja
-  en [−1,1] (normalizado desde S16).
-- Etapa 6 (mezcla) + refactor: `chan_t` en `dsp.h` encapsula la cadena
-  por canal; `mix_out` promedia a mono dual con master. `micfx` emite
-  L=R=mezcla con clip en [−1,1]. Verificado con `src/test_mix.c`
-  (`MIX_OK`, valores exactos). Commit `9e3d04e`.
-- Etapa 7 (reverb compartida): Schroeder mono en `dsp.h` (4 combs
-  0.84 + 2 allpass 0.5, buffers estáticos ~115 KB). Sends por canal y
-  `reverb_amount`, wet sumado pre-master. `test_rev`: `REV_OK`
-  (amount=0 mudo, cola que decae y acotada). Commit `eb2b2b2`.
-- Etapa 8 (delay opcional): eco mono con feedback, hasta 1 s, `mix=0` =
-  bypass. `test_dly`: `DLY_OK` (ecos 0.5/0.25 exactos).
-- Etapa 9 (limiter final): brickwall a `limiter_threshold`, última etapa
-  tras el master. `test_lim`: `LIM_OK`. Cadena completa:
+- Playback baseline (`hw:0,0` Headphones, 48 kHz S16 stereo, 20 ms buffer,
+  real period 480): **10 s, 0 xruns, 2.4 % CPU**. With a 5 ms buffer:
+  499 underruns (expected; the gate is 0 xruns with buffer ≥20 ms).
+- Stage 3 (HPF) without hardware: `src/dsp.h` (RBJ biquad),
+  per-channel in `micfx` (`hpf_frequency`, 0 = bypass).
+  Verified offline on the Pi with `src/test_hpf.c`: fc=100 Hz →
+  50 Hz at −12.3 dB (theory −12.0), 1 kHz at 0.0 dB. `HPF_OK`.
+  Also caught a real bug: the config parser stalled on comment lines
+  (`fscanf`); now reads line by line with `fgets`+`sscanf`.
+- Stage 4 (compressor) without hardware: `comp_t` in `dsp.h`
+  (peak follower + exponential attack/release, linear threshold/ratio curve,
+  independent state per channel, ratio ≤1 = bypass).
+  Verified offline with `src/test_comp.c`: input 0.5 with threshold 0.25 and
+  4:1 ratio → 0.330 (theory 0.3125, ±10 % tolerance); below-threshold intact;
+  bit-exact bypass. `COMP_OK`. Integrated in `micfx` after the HPF, works
+  in [−1,1] (normalized from S16).
+- Stage 5 (EQ) without hardware: `eq3_t` in `dsp.h`
+  (250 Hz low-shelf, 1 kHz peak Q=1, 4 kHz high-shelf, RBJ).
+  Verified with `src/test_eq.c`: flat passes 0.5000 exactly, +6 dB boosts
+  (≈×2) only in their band, rest untouched. `EQ_OK`.
+  Commits: `aff5b4d` (stages 1–4), `420ba95` (stage 5).
+- Stage 6 (mix) + refactor: `chan_t` in `dsp.h` wraps the per-channel chain;
+  `mix_out` averages to dual mono with master. `micfx` outputs
+  L=R=mix with clip at [−1,1]. Verified with `src/test_mix.c`
+  (`MIX_OK`, exact values). Commit `9e3d04e`.
+- Stage 7 (shared reverb): mono Schroeder in `dsp.h` (4 combs
+  0.84 + 2 allpasses 0.5, static ~115 KB buffers). Per-channel sends and
+  `reverb_amount`, wet added pre-master. `test_rev`: `REV_OK`
+  (amount=0 silent, decaying bounded tail). Commit `eb2b2b2`.
+- Stage 8 (optional delay): mono echo with feedback, up to 1 s, `mix=0` =
+  bypass. `test_dly`: `DLY_OK` (exact 0.5/0.25 echoes).
+- Stage 9 (final limiter): brickwall at `limiter_threshold`, last stage
+  after master. `test_lim`: `LIM_OK`. Full chain:
   HPF → comp → EQ → mix → reverb → delay → master → limiter.
-  Commit `bde432e`. Suite 7/7 en verde, cero warnings.
-- Etapa 5 (EQ) implementada sin hardware: `eq3_t` en `dsp.h`
-  (low-shelf 250 Hz, pico 1 kHz Q=1, high-shelf 4 kHz, RBJ).
-  Verificado con `src/test_eq.c`: flat 0.5000 exacto, boosts +6 dB
-  (≈×2) solo en su banda, resto intacto. `EQ_OK`. Cadena actual:
-  HPF → comp → EQ → gains. Commits: `aff5b4d` (etapas 1–4), `420ba95` (etapa 5).
-- Pendiente: el usuario conectará su interfaz M-Audio por USB; entonces
-  reescaneo (`arecord -l`), elección de `hw:X,Y` y test full-duplex.
+  Commit `bde432e`. Suite 7/7 green, zero warnings.
+- Pending: the user will plug in their M-Audio USB interface; then
+  rescan (`arecord -l`), pick `hw:X,Y`, and run the full-duplex test.
 
-Pendiente: que el usuario pegue la salida de este bloque ejecutado **en la Pi por SSH** (solo lectura; no instala nada):
-
-```bash
-echo "=== 1. Modelo / sistema ==="
-cat /proc/device-tree/model; echo
-uname -a; cat /etc/os-release | head -5
-cat /proc/cmdline; nproc; free -h | head -3
-echo "=== 2. ALSA cards ==="
-cat /proc/asound/cards; echo
-cat /proc/asound/devices; echo
-command -v aplay >/dev/null && { aplay -l; echo; arecord -l; } || echo "MISSING: alsa-utils"
-echo "=== 3. PCM info por subdispositivo ==="
-for f in /proc/asound/card*/pcm*/sub*/info; do echo "--- $f"; cat "$f"; echo; done
-echo "=== 4. Kernel RT / audio ==="
-uname -v; ls /sys/kernel/realtime 2>&1
-lsmod | grep -E '^snd' || echo "no snd modules"
-dmesg | grep -i -E 'snd|audio|usb.*audio|i2s|bcm2835|UAC' | head -30; echo
-lsusb; echo
-cat /boot/firmware/config.txt 2>/dev/null | grep -i -E 'audio|i2s|dac|dtoverlay' || cat /boot/config.txt 2>/dev/null | grep -i -E 'audio|i2s|dac|dtoverlay' || echo "no config.txt match"
-```
-
-- Si falta `aplay`/`arecord`, única dependencia de esta fase: `sudo apt update && sudo apt install -y alsa-utils` (rollback: `sudo apt remove alsa-utils`).
-- Hipótesis a confirmar: con Pi 3 sin hardware USB/I2S enchufado, lo normal es ver solo `bcm2835 Headphones/HDMI` y **ningún dispositivo de captura**.
-- Siguiente paso tras recibir la salida: elegir candidato `hw:X,Y` y test de loopback `arecord | aplay` para xruns/latencia.
-
-## Estructura prevista del repo (aún no creada)
+## Repo layout
 
 ```text
 micfx/
-  README.md        # este fichero
-  src/             # DSP en C/C++ (passthrough primero)
-  config/          # fichero de parámetros
-  systemd/         # unidad micfx.service
-  tools/           # scripts de medición (xruns, latencia, CPU)
+  README.md        # this file
+  src/             # DSP in C (tone, micfx, offline tests)
+  config/          # parameter file
+  systemd/         # micfx.service unit
+  tools/           # measurement scripts (xruns, latency, CPU)
 ```
