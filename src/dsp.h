@@ -131,4 +131,38 @@ static inline float eq3_run(eq3_t *e, float x) {
     return bq_run(&e->high, bq_run(&e->mid, bq_run(&e->low, x)));
 }
 
+/* Canal completo (etapas 2-5): HPF -> comp -> EQ -> ganancia.
+ * Todo en float; el llamador normaliza a [-1,1] antes de entrar. */
+typedef struct {
+    hpf_t hpf; int use_hpf;
+    comp_t comp;
+    eq3_t eq;
+    float gain;
+} chan_t;
+
+static inline void chan_init(chan_t *ch, float hpf_hz,
+                             float c_thr, float c_ratio,
+                             float c_atk, float c_rel,
+                             float eq_low, float eq_mid, float eq_high,
+                             float gain, float rate) {
+    ch->use_hpf = hpf_hz > 0.0f;
+    if (ch->use_hpf) hpf_init(&ch->hpf, hpf_hz, rate);
+    comp_init(&ch->comp, c_thr, c_ratio, c_atk, c_rel, rate);
+    eq3_init(&ch->eq, eq_low, eq_mid, eq_high, rate);
+    ch->gain = gain;
+}
+
+static inline float chan_run(chan_t *ch, float x) {
+    if (ch->use_hpf) x = hpf_run(&ch->hpf, x);
+    x = comp_run(&ch->comp, x);
+    x = eq3_run(&ch->eq, x);
+    return x * ch->gain;
+}
+
+/* Etapa 6: mezcla a mono dual — ambas salidas = promedio, con master. */
+static inline void mix_out(float l, float r, float master, float *ol, float *or_) {
+    float m = (l + r) * 0.5f * master;
+    *ol = m; *or_ = m;
+}
+
 #endif

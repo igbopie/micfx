@@ -75,34 +75,28 @@ int main(int argc, char **argv) {
     printf("cap=%s play=%s rate=%u period=%lu\n", capd, playd, rate, (unsigned long)bp);
 
     static int16_t buf[8192 * 2]; /* estático: sin malloc en el loop */
-    hpf_t hpf1, hpf2;
-    int use_hpf = g_hpf > 0.0f;
-    if (use_hpf) { hpf_init(&hpf1, g_hpf, (float)rate); hpf_init(&hpf2, g_hpf, (float)rate); }
-    comp_t comp1, comp2;
-    comp_init(&comp1, g_c_thr, g_c_ratio, g_c_atk, g_c_rel, (float)rate);
-    comp_init(&comp2, g_c_thr, g_c_ratio, g_c_atk, g_c_rel, (float)rate);
-    eq3_t eq1, eq2;
-    eq3_init(&eq1, g_eq_low, g_eq_mid, g_eq_high, (float)rate);
-    eq3_init(&eq2, g_eq_low, g_eq_mid, g_eq_high, (float)rate);
+    chan_t ch1, ch2;
+    float frate = (float)rate;
+    chan_init(&ch1, g_hpf, g_c_thr, g_c_ratio, g_c_atk, g_c_rel,
+              g_eq_low, g_eq_mid, g_eq_high, g_mic1, frate);
+    chan_init(&ch2, g_hpf, g_c_thr, g_c_ratio, g_c_atk, g_c_rel,
+              g_eq_low, g_eq_mid, g_eq_high, g_mic2, frate);
     long xr_c = 0, xr_p = 0, total = 0;
     for (;;) {
         snd_pcm_sframes_t r = snd_pcm_readi(cap, buf, bp);
         if (r == -EPIPE) { xr_c++; snd_pcm_recover(cap, r, 0); continue; }
         if (r < 0) { fprintf(stderr, "readi: %s\n", snd_strerror(r)); return 1; }
         for (snd_pcm_sframes_t i = 0; i < r; i++) {
-            float l = (float)buf[2 * i], rr = (float)buf[2 * i + 1];
-            if (use_hpf) { l = hpf_run(&hpf1, l); rr = hpf_run(&hpf2, rr); }
-            l = comp_run(&comp1, l / 32768.0f) * 32768.0f; /* comp en [-1,1] */
-            rr = comp_run(&comp2, rr / 32768.0f) * 32768.0f;
-            l = eq3_run(&eq1, l / 32768.0f) * 32768.0f; /* EQ en [-1,1] */
-            rr = eq3_run(&eq2, rr / 32768.0f) * 32768.0f;
-            l *= g_mic1 * g_master;
-            rr *= g_mic2 * g_master;
-            if (l > 32767) l = 32767;
-            if (l < -32768) l = -32768;
-            if (rr > 32767) rr = 32767;
-            if (rr < -32768) rr = -32768;
-            buf[2 * i] = (int16_t)l; buf[2 * i + 1] = (int16_t)rr;
+            float l = chan_run(&ch1, buf[2 * i] / 32768.0f);
+            float rr = chan_run(&ch2, buf[2 * i + 1] / 32768.0f);
+            float ol, orr;
+            mix_out(l, rr, g_master, &ol, &orr);
+            if (ol > 1.0f) ol = 1.0f;
+            if (ol < -1.0f) ol = -1.0f;
+            if (orr > 1.0f) orr = 1.0f;
+            if (orr < -1.0f) orr = -1.0f;
+            buf[2 * i] = (int16_t)(ol * 32767.0f);
+            buf[2 * i + 1] = (int16_t)(orr * 32767.0f);
         }
         snd_pcm_sframes_t off = 0;
         while (off < r) {
