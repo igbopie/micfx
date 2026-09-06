@@ -1,12 +1,12 @@
-/* test_rev.c — verificación offline de la reverb (sin ALSA).
+/* test_rev.c — offline reverb verification (no ALSA).
  *
- * Impulso 1.0 por canal 1 (resto ceros), 2 s @ 48 kHz, cadena:
+ * 1.0 impulse on channel 1 (rest zeros), 2 s @ 48 kHz, chain:
  * chan(bypass,gain=1) -> mix -> send(1,1) -> reverb -> master=1.
- *   1. amount=0: salida idénticamente 0 tras el impulso.
- *   2. amount=1: hay cola (E[0.3-1s] > 0), acotada (pico < 2.0)
- *      y decae (E[1.5-2s] < E[0-0.5s]).
- *   3. sends=0: salida 0 aunque amount=1.
- * Sale 0 si todo cumple, 1 si no.
+ *   1. amount=0: output identically 0 after the impulse.
+ *   2. amount=1: tail exists (E[0.3-1s] > 0), bounded (peak < 2.0)
+ *      and decaying (E[1.5-2s] < E[0-0.5s]).
+ *   3. sends=0: output 0 even with amount=1.
+ * Exits 0 if all holds, 1 otherwise.
  */
 #include <math.h>
 #include <stdio.h>
@@ -37,7 +37,7 @@ static float run_one(float s1, float s2, float amount,
         float o = m + rev.amount * w;
         float a = o < 0 ? -o : o;
         if (a > pka) pka = a;
-        if (i >= 8 && a > pkt) pkt = a; /* cola: pasado el impulso dry */
+        if (i >= 8 && a > pkt) pkt = a; /* tail: past the dry impulse */
         if (i < 24000) ee += a;
         else if (i < 48000) em += a;
         else el += a;
@@ -51,16 +51,16 @@ int main(void) {
     float ee, em, el, pka, pkt;
     run_one(1, 1, 0.0f, &ee, &em, &el, &pka, &pkt);
     int t1 = pkt == 0.0f;
-    printf("amount=0: cola=%.6f %s\n", pkt, t1 ? "ok" : "FAIL");
+    printf("amount=0: tail=%.6f %s\n", pkt, t1 ? "ok" : "FAIL");
 
     run_one(1, 1, 1.0f, &ee, &em, &el, &pka, &pkt);
     int t2 = em > 0.0f && pka < 2.0f && el < ee;
-    printf("amount=1: cola=%.4f pico=%.4f cae=%d %s\n", em, pka, el < ee,
+    printf("amount=1: tail=%.4f peak=%.4f decays=%d %s\n", em, pka, el < ee,
            t2 ? "ok" : "FAIL");
 
     run_one(0, 0, 1.0f, &ee, &em, &el, &pka, &pkt);
-    int t3 = pka == 0.5f && pkt == 0.0f; /* solo el impulso dry, sin cola */
-    printf("sends=0: pico=%.6f cola=%.6f %s\n", pka, pkt, t3 ? "ok" : "FAIL");
+    int t3 = pka == 0.5f && pkt == 0.0f; /* dry impulse only, no tail */
+    printf("sends=0: peak=%.6f tail=%.6f %s\n", pka, pkt, t3 ? "ok" : "FAIL");
 
     int ok = t1 && t2 && t3;
     printf("%s\n", ok ? "REV_OK" : "REV_FAIL");

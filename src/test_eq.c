@@ -1,12 +1,12 @@
-/* test_eq.c — verificación offline del EQ 3 bandas (sin ALSA).
+/* test_eq.c — offline 3-band EQ verification (no ALSA).
  *
- * Casos (48 kHz, 1 s transitorio + 1 s medida):
- *   1. (0,0,0) dB, 1 kHz amp 0.5 -> 0.5 (±0.5 %)
- *   2. low +6 dB, 100 Hz amp 0.5 -> ~1.0 (±5 %)
- *   3. low +6 dB, 10 kHz amp 0.5 -> ~0.5 (±3 %)
- *   4. mid +6 dB, 1 kHz amp 0.5 -> ~1.0 (±5 %)
- *   5. high +6 dB, 10 kHz amp 0.5 -> ~1.0 (±5 %)
- * Sale 0 si todos cumplen, 1 si no.
+ * Cases (48 kHz, 1 s transient + 1 s measurement):
+ *   1. (0,0,0) dB, 1 kHz amp 0.5 -> 0.5 (±0.5%)
+ *   2. low +6 dB, 100 Hz amp 0.5 -> ~1.0 (±5%)
+ *   3. low +6 dB, 10 kHz amp 0.5 -> ~0.5 (±3%)
+ *   4. mid +6 dB, 1 kHz amp 0.5 -> ~1.0 (±5%)
+ *   5. high +6 dB, 10 kHz amp 0.5 -> ~1.0 (±5%)
+ * Exits 0 if all hold, 1 otherwise.
  */
 #include <math.h>
 #include <stdio.h>
@@ -30,7 +30,7 @@ static float peak_out(float freq, float amp, float low, float mid, float high) {
 
 static int check(const char *name, float got, float want, float tol) {
     int ok = got > want * (1 - tol) && got < want * (1 + tol);
-    printf("%-28s -> %.4f (esp %.4f) %s\n", name, got, want, ok ? "ok" : "FAIL");
+    printf("%-28s -> %.4f (exp %.4f) %s\n", name, got, want, ok ? "ok" : "FAIL");
     return ok;
 }
 

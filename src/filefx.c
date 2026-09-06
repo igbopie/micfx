@@ -1,10 +1,10 @@
-/* filefx.c — procesa un fichero WAV por la cadena completa de micfx.
+/* filefx.c — runs a WAV file through the full micfx chain.
  *
- * Uso: filefx -c conf entrada.wav salida.wav
- * Lee PCM16 mono/estéreo a cualquier rate, corre la cadena a ese rate
- * (chan x2 -> mix -> reverb -> delay -> master -> limiter), escribe
- * WAV estéreo S16 (mono dual) e imprime pico/RMS de entrada y salida.
- * Sin ALSA: sirve para verificar con muestras reales sin hardware.
+ * Usage: filefx -c conf in.wav out.wav
+ * Reads mono/stereo PCM16 at any rate, runs the chain at that rate
+ * (chan x2 -> mix -> reverb -> delay -> master -> limiter), writes
+ * stereo S16 WAV (dual mono) and prints input/output peak/RMS.
+ * No ALSA: verifies with real samples, no hardware needed.
  */
 #include <math.h>
 #include <stdint.h>
@@ -37,10 +37,10 @@ static void wr16(FILE *f, uint16_t v) {
     fwrite(b, 1, 2, f);
 }
 
-/* Lee WAV PCM16. Devuelve 0 ok. Salida en buffers mono float [-1,1] (malloc). */
+/* Reads PCM16 WAV. Returns 0 on success. Outputs mono float [-1,1] buffers (malloc). */
 static int read_wav(const char *path, float **l, float **r, long *n, int *rate) {
     FILE *f = fopen(path, "rb");
-    if (!f) { fprintf(stderr, "no abre %s\n", path); return 1; }
+    if (!f) { fprintf(stderr, "cannot open %s\n", path); return 1; }
     char id[4];
     if (fread(id, 1, 4, f) != 4 || memcmp(id, "RIFF", 4)) { fclose(f); return 1; }
     rd32(f);
@@ -57,7 +57,7 @@ static int read_wav(const char *path, float **l, float **r, long *n, int *rate) 
             ch = rd16(f); sr = (int)rd32(f);
             rd32(f); rd16(f); bits = rd16(f);
             if (fmt != 1 || bits != 16 || (ch != 1 && ch != 2)) {
-                fprintf(stderr, "formato no soportado (fmt=%d ch=%d bits=%d)\n", fmt, ch, bits);
+                fprintf(stderr, "unsupported format (fmt=%d ch=%d bits=%d)\n", fmt, ch, bits);
                 fclose(f);
                 return 1;
             }
@@ -92,7 +92,7 @@ static int read_wav(const char *path, float **l, float **r, long *n, int *rate) 
 
 static void write_wav(const char *path, const float *l, const float *r, long n, int rate) {
     FILE *f = fopen(path, "wb");
-    if (!f) { fprintf(stderr, "no escribe %s\n", path); exit(1); }
+    if (!f) { fprintf(stderr, "cannot write %s\n", path); exit(1); }
     fwrite("RIFF", 1, 4, f);
     wr32(f, 36 + (uint32_t)(n * 4));
     fwrite("WAVEfmt ", 1, 8, f);
@@ -117,19 +117,19 @@ int main(int argc, char **argv) {
         if (!strcmp(argv[i], "-c") && i + 1 < argc) conf = argv[++i];
         else if (!inp) inp = argv[i];
         else if (!outp) outp = argv[i];
-        else { fprintf(stderr, "uso: %s [-c conf] entrada.wav salida.wav\n", argv[0]); return 2; }
+        else { fprintf(stderr, "usage: %s [-c conf] in.wav out.wav\n", argv[0]); return 2; }
     }
-    if (!inp || !outp) { fprintf(stderr, "uso: %s [-c conf] entrada.wav salida.wav\n", argv[0]); return 2; }
+    if (!inp || !outp) { fprintf(stderr, "usage: %s [-c conf] in.wav out.wav\n", argv[0]); return 2; }
 
     conf_t C;
     conf_defaults(&C);
-    if (!conf_load(&C, conf)) fprintf(stderr, "conf %s no encontrado, defaults\n", conf);
+    if (!conf_load(&C, conf)) fprintf(stderr, "conf %s not found, using defaults\n", conf);
     conf_print(&C);
 
     float *il, *ir, *ol, *orr;
     long n;
     int rate;
-    if (read_wav(inp, &il, &ir, &n, &rate)) { fprintf(stderr, "WAV ilegible\n"); return 1; }
+    if (read_wav(inp, &il, &ir, &n, &rate)) { fprintf(stderr, "unreadable WAV\n"); return 1; }
     printf("in: %ld frames @ %d Hz\n", n, rate);
     ol = malloc((size_t)n * sizeof(float));
     orr = malloc((size_t)n * sizeof(float));
@@ -157,15 +157,15 @@ int main(int argc, char **argv) {
         float echo = delay_run(&dly, dry + rev.amount * wet);
         float o = lim_run(&lim, echo * C.master);
         ol[i] = o; orr[i] = o;
-        float ai = dry < 0 ? -dry : dry; /* métrica sobre el mix dry */
+        float ai = dry < 0 ? -dry : dry; /* metric over the dry mix */
         float ao = o < 0 ? -o : o;
         se_i += (double)ai * ai; se_o += (double)ao * ao;
         if (ai > pk_i) pk_i = ai;
         if (ao > pk_o) pk_o = ao;
     }
-    printf("in:  pico=%.4f rms=%.4f\n", pk_i, sqrt(se_i / n));
-    printf("out: pico=%.4f rms=%.4f\n", pk_o, sqrt(se_o / n));
+    printf("in:  peak=%.4f rms=%.4f\n", pk_i, sqrt(se_i / n));
+    printf("out: peak=%.4f rms=%.4f\n", pk_o, sqrt(se_o / n));
     write_wav(outp, ol, orr, n, rate);
-    printf("escrito %s\n", outp);
+    printf("wrote %s\n", outp);
     return 0;
 }

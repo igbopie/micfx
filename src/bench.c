@@ -1,8 +1,8 @@
-/* bench.c — coste CPU de la cadena completa (sin ALSA).
+/* bench.c — CPU cost of the full chain (no ALSA).
  *
- * Procesa 30 s estéreo sintético (senos) a 48 kHz con todos los
- * efectos activos y mide tiempo de CPU vs tiempo de audio.
- * Uso: bench  (imprime % de un núcleo para bypass y full)
+ * Processes 30 s of synthetic stereo (sines) at 48 kHz with all
+ * effects engaged and measures CPU time vs audio time.
+ * Usage: bench  (prints % of one core for bypass and full)
  */
 #include <math.h>
 #include <stdio.h>
@@ -22,7 +22,7 @@ static double run(int full) {
     delay_init(&dly, full ? 250.0f : 0.0f, 0.35f, full ? 0.2f : 0.0f, 48000.0f);
     lim_t lim;
     lim_init(&lim, 0.95f);
-    volatile float sink = 0.0f; /* evita que el compilador pode el loop */
+    volatile float sink = 0.0f; /* keep the compiler from pruning the loop */
     clock_t t0 = clock();
     const long n = 30L * 48000L;
     for (long i = 0; i < n; i++) {
@@ -40,12 +40,12 @@ static double run(int full) {
         sink += o;
     }
     clock_t t1 = clock();
-    if (sink == 12345.0f) printf("nunca\n");
+    if (sink == 12345.0f) printf("unreachable\n");
     return 100.0 * (double)(t1 - t0) / CLOCKS_PER_SEC / 30.0;
 }
 
 int main(void) {
-    printf("bypass: %.2f%% de un nucleo\n", run(0));
-    printf("full:   %.2f%% de un nucleo\n", run(1));
+    printf("bypass: %.2f%% of one core\n", run(0));
+    printf("full:   %.2f%% of one core\n", run(1));
     return 0;
 }

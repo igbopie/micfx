@@ -1,10 +1,10 @@
-/* test_lim.c — verificación offline del limiter (sin ALSA).
+/* test_lim.c — offline limiter verification (no ALSA).
  *
- * Seno 1 kHz @ 48 kHz, 1 s (tras 0.5 s de estabilización):
- *   amp 1.5, thr 1.0 -> pico 1.0 (±0.1 %)
- *   amp 0.5, thr 1.0 -> pico 0.5 intacto (±0.1 %)
- *   amp -1.5 (fase), thr 0.8 -> pico 0.8 simétrico (±0.1 %)
- * Sale 0 si todo cumple, 1 si no.
+ * 1 kHz sine @ 48 kHz, 1 s (after 0.5 s settling):
+ *   amp 1.5, thr 1.0 -> peak 1.0 (±0.1%)
+ *   amp 0.5, thr 1.0 -> peak 0.5 intact (±0.1%)
+ *   amp -1.5 (phase), thr 0.8 -> symmetric 0.8 peak (±0.1%)
+ * Exits 0 if all holds, 1 otherwise.
  */
 #include <math.h>
 #include <stdio.h>
@@ -28,7 +28,7 @@ int main(void) {
     float p1 = peak_out(1.5f, 1.0f);
     float p2 = peak_out(0.5f, 1.0f);
     float p3 = peak_out(-1.5f, 0.8f);
-    printf("lim: 1.5->%.4f (esp 1.0) | 0.5->%.4f (esp 0.5) | -1.5->%.4f (esp 0.8)\n",
+    printf("lim: 1.5->%.4f (exp 1.0) | 0.5->%.4f (exp 0.5) | -1.5->%.4f (exp 0.8)\n",
            p1, p2, p3);
     int ok = (p1 > 0.999f && p1 < 1.001f)
           && (p2 > 0.4995f && p2 < 0.5005f)

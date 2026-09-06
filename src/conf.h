@@ -1,5 +1,5 @@
-/* conf.h — parámetros de micfx compartidos (passthrough ALSA + filefx).
- * Formato: líneas "clave valor" (floats); comentarios con # se ignoran.
+/* conf.h — shared micfx parameters (ALSA passthrough + filefx).
+ * Format: "key value" lines (floats); # comments are ignored.
  */
 #ifndef MICFX_CONF_H
 #define MICFX_CONF_H
@@ -25,7 +25,7 @@ static inline void conf_defaults(conf_t *c) {
     c->lim_thr = 1.0f;
 }
 
-/* Devuelve 1 si abrió el fichero, 0 si no existe (usa defaults). */
+/* Returns 1 if the file was opened, 0 if missing (uses defaults). */
 static inline int conf_load(conf_t *c, const char *path) {
     FILE *f = fopen(path, "r");
     if (!f) return 0;

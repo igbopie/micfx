@@ -1,5 +1,5 @@
-/* dsp.h — bloques DSP compartidos (sin ALSA, testeables offline).
- * Etapa 3: high-pass biquad (RBJ cookbook), Q=0.7071 (Butterworth 2º orden).
+/* dsp.h — shared DSP blocks (no ALSA, offline-testable).
+ * Stage 3: high-pass biquad (RBJ cookbook), Q=0.7071 (2nd-order Butterworth).
  */
 #ifndef MICFX_DSP_H
 #define MICFX_DSP_H
@@ -30,10 +30,10 @@ static inline float hpf_run(hpf_t *f, float x) {
     return y;
 }
 
-/* Compresor de pico por canal: seguidor de envolvente con attack/release
- * exponenciales + curva estática (umbral/ratio en lineal). Sin branches
- * costosos ni memoria dinámica: apto para el loop realtime.
- * ratio <= 1.0f = bypass (devuelve la entrada tal cual).
+/* Per-channel peak compressor: envelope follower with exponential
+ * attack/release + static curve (linear threshold/ratio). No costly
+ * branches, no dynamic memory: safe for the realtime loop.
+ * ratio <= 1.0f = bypass (returns input unchanged).
  */
 typedef struct {
     float thresh, ratio, atk, rel;
@@ -58,8 +58,8 @@ static inline float comp_run(comp_t *c, float x) {
     return x * (target / c->env);
 }
 
-/* EQ de 3 bandas por canal: low-shelf 250 Hz, pico 1 kHz (Q=1),
- * high-shelf 4 kHz (RBJ cookbook). Ganancias en dB; 0 dB = pasa-todo.
+/* Per-channel 3-band EQ: 250 Hz low-shelf, 1 kHz peak (Q=1),
+ * 4 kHz high-shelf (RBJ cookbook). Gains in dB; 0 dB = all-pass.
  */
 typedef struct {
     float b0, b1, b2, a1, a2;
@@ -131,8 +131,8 @@ static inline float eq3_run(eq3_t *e, float x) {
     return bq_run(&e->high, bq_run(&e->mid, bq_run(&e->low, x)));
 }
 
-/* Canal completo (etapas 2-5): HPF -> comp -> EQ -> ganancia.
- * Todo en float; el llamador normaliza a [-1,1] antes de entrar. */
+/* Full channel (stages 2-5): HPF -> comp -> EQ -> gain.
+ * All float; the caller normalizes to [-1,1] on entry. */
 typedef struct {
     hpf_t hpf; int use_hpf;
     comp_t comp;
@@ -159,16 +159,16 @@ static inline float chan_run(chan_t *ch, float x) {
     return x * ch->gain;
 }
 
-/* Etapa 6: mezcla a mono dual — ambas salidas = promedio, con master. */
+/* Stage 6: dual-mono mix — both outputs = average, with master. */
 static inline void mix_out(float l, float r, float master, float *ol, float *or_) {
     float m = (l + r) * 0.5f * master;
     *ol = m; *or_ = m;
 }
 
-/* Etapa 7: reverb compartida tipo Schroeder (mono).
- * 4 combs en paralelo + 2 allpass en serie. Buffers estáticos
- * (hasta 50 ms @ 96 kHz): sin malloc, apta para realtime.
- * amount = nivel wet (0 = solo dry). Estable con fb < 1.
+/* Stage 7: shared Schroeder-style reverb (mono).
+ * 4 parallel combs + 2 series allpasses. Static buffers
+ * (up to 50 ms @ 96 kHz): no malloc, realtime-safe.
+ * amount = wet level (0 = dry only). Stable with fb < 1.
  */
 #define REV_MAXD 4800
 
@@ -203,7 +203,7 @@ static inline void dline_reset(dline_t *d, int len) {
 
 static inline void reverb_init(reverb_t *r, float amount, float rate) {
     float k = rate / 48000.0f;
-    /* retardos estilo Freeverb, escalados por frecuencia de muestreo */
+    /* Freeverb-style delays, scaled by sample rate */
     const int cl[4] = { 1557, 1617, 1491, 1422 };
     const int al[2] = { 556, 441 };
     for (int i = 0; i < 4; i++) dline_reset(&r->comb[i], (int)(cl[i] * k));
@@ -220,8 +220,8 @@ static inline float reverb_wet(reverb_t *r, float x) {
     return y;
 }
 
-/* Etapa 8: delay/echo mono (opcional). Línea con realimentación;
- * buffer estático hasta 1 s @ 48 kHz. mix=0 = bypass.
+/* Stage 8: mono delay/echo (optional). Feedback line;
+ * static buffer up to 1 s @ 48 kHz. mix=0 = bypass.
  */
 #define DLY_MAX 48000
 
@@ -247,8 +247,8 @@ static inline float delay_run(delay_t *d, float x) {
     return x * (1.0f - d->mix) + e * d->mix;
 }
 
-/* Etapa 9: limiter final brickwall. Recorta a ±umbral (lineal).
- * Es la última etapa: seguridad anti-clip antes de la salida.
+/* Stage 9: final brickwall limiter. Clips to ±threshold (linear).
+ * Last stage: anti-clip safety before the output.
  */
 typedef struct { float thr; } lim_t;
 

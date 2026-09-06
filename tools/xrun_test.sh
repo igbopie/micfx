@@ -1,9 +1,9 @@
 #!/bin/bash
-# tools/xrun_test.sh — test base de playback en la Pi.
-# Uso (en la Pi, desde el dir con tone compilado):
-#   ./xrun_test.sh [device] [segundos]
-# Mide xruns + %CPU con el seno de prueba. Gate etapa 1:
-#   0 xruns en 60 s a 48 kHz / periodo 128 antes de seguir.
+# tools/xrun_test.sh — baseline playback test on the Pi.
+# Usage (on the Pi, from the dir with tone built):
+#   ./xrun_test.sh [device] [seconds]
+# Measures xruns + %CPU with the test sine. Stage 1 gate:
+#   0 xruns in 60 s at 48 kHz / period 128 before moving on.
 set -u
 DEV="${1:-hw:0,0}"
 SECS="${2:-60}"

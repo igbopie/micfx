@@ -1,10 +1,10 @@
-/* test_mix.c — verificación offline de canal + mezcla (sin ALSA).
+/* test_mix.c — offline channel + mix verification (no ALSA).
  *
- * Dos canales en bypass (HPF 0, comp 1:1, EQ flat), gains 1.0 y 0.5,
- * seno 1 kHz amp 0.5 en ambos, master 1.0:
- *   L = R = 0.5*(0.5 + 0.25) = 0.375 (±0.5 %)
- * Con master 0.5: L = R = 0.1875 (±0.5 %).
- * Sale 0 si todo cumple, 1 si no.
+ * Two bypassed channels (HPF 0, comp 1:1, flat EQ), gains 1.0 and 0.5,
+ * 1 kHz sine amp 0.5 on both, master 1.0:
+ *   L = R = 0.5*(0.5 + 0.25) = 0.375 (±0.5%)
+ * With master 0.5: L = R = 0.1875 (±0.5%).
+ * Exits 0 if all holds, 1 otherwise.
  */
 #include <math.h>
 #include <stdio.h>
@@ -33,8 +33,8 @@ int main(void) {
     float l1, r1, l2, r2;
     run(&l1, &r1, 1.0f, 0.5f, 1.0f);
     run(&l2, &r2, 1.0f, 0.5f, 0.5f);
-    printf("mix master=1.0: L=%.4f R=%.4f (esp 0.375)\n", l1, r1);
-    printf("mix master=0.5: L=%.4f R=%.4f (esp 0.1875)\n", l2, r2);
+    printf("mix master=1.0: L=%.4f R=%.4f (exp 0.375)\n", l1, r1);
+    printf("mix master=0.5: L=%.4f R=%.4f (exp 0.1875)\n", l2, r2);
     int ok = (l1 > 0.3731f && l1 < 0.3769f) && (r1 > 0.3731f && r1 < 0.3769f)
           && (l2 > 0.1866f && l2 < 0.1884f) && (r2 > 0.1866f && r2 < 0.1884f);
     printf("%s\n", ok ? "MIX_OK" : "MIX_FAIL");

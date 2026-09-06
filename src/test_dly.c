@@ -1,9 +1,9 @@
-/* test_dly.c — verificación offline del delay (sin ALSA).
+/* test_dly.c — offline delay verification (no ALSA).
  *
- * Impulso 1.0, 1 s @ 48 kHz, delay 100 ms, fb 0.5, mix 0.5:
- *   y[0] = 0.5 (dry), y[4800] ≈ 0.5 (eco 1), y[9600] ≈ 0.25 (eco 2).
- * Con mix=0: impulso intacto (1.0) y cola cero.
- * Sale 0 si todo cumple, 1 si no.
+ * 1.0 impulse, 1 s @ 48 kHz, delay 100 ms, fb 0.5, mix 0.5:
+ *   y[0] = 0.5 (dry), y[4800] ≈ 0.5 (echo 1), y[9600] ≈ 0.25 (echo 2).
+ * With mix=0: impulse intact (1.0), zero tail.
+ * Exits 0 if all holds, 1 otherwise.
  */
 #include <math.h>
 #include <stdio.h>
@@ -20,7 +20,7 @@ int main(void) {
         if (i == 4800) y1 = y;
         if (i == 9600) y2 = y;
     }
-    printf("delay: y0=%.4f (esp 0.5) eco1=%.4f (esp 0.5) eco2=%.4f (esp 0.25)\n",
+    printf("delay: y0=%.4f (exp 0.5) echo1=%.4f (exp 0.5) echo2=%.4f (exp 0.25)\n",
            y0, y1, y2);
     int t1 = y0 > 0.49f && y0 < 0.51f
           && y1 > 0.475f && y1 < 0.525f
@@ -35,7 +35,7 @@ int main(void) {
         if (i >= 8 && a > tail) tail = a;
     }
     int t2 = pk == 1.0f && tail == 0.0f;
-    printf("bypass mix=0: pico=%.4f cola=%.6f %s\n", pk, tail, t2 ? "ok" : "FAIL");
+    printf("bypass mix=0: peak=%.4f tail=%.6f %s\n", pk, tail, t2 ? "ok" : "FAIL");
 
     int ok = t1 && t2;
     printf("%s\n", ok ? "DLY_OK" : "DLY_FAIL");

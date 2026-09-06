@@ -1,10 +1,10 @@
-/* test_hpf.c — verificación offline del high-pass (sin ALSA).
+/* test_hpf.c — offline high-pass verification (no ALSA).
  *
- * Genera senos de 50 Hz y 1000 Hz, los pasa por hpf_init(fc=100 Hz)
- * y mide atenuación en régimen permanente. Criterios:
- *   50 Hz  ≈ -12 dB (±2 dB)   [2º orden: (fc/f)^2 -> (100/50)^2 = 4x = -12 dB]
+ * Feeds 50 Hz and 1000 Hz sines through hpf_init(fc=100 Hz)
+ * and measures steady-state attenuation. Criteria:
+ *   50 Hz   ≈ -12 dB (±2 dB)   [2nd order: (fc/f)^2 -> (100/50)^2 = 4x = -12 dB]
  *   1000 Hz ≈ 0 dB (±0.5 dB)
- * Sale 0 si ambos cumplen, 1 si no.
+ * Exits 0 if both hold, 1 otherwise.
  */
 #include <math.h>
 #include <stdio.h>
@@ -13,8 +13,8 @@
 static float measure(float freq, float fc, float rate) {
     hpf_t f;
     hpf_init(&f, fc, rate);
-    long skip = (long)rate;       /* 1 s de transitorio */
-    long n = (long)rate;          /* 1 s de medida */
+    long skip = (long)rate;       /* 1 s of transient */
+    long n = (long)rate;          /* 1 s of measurement */
     float peak = 0.0f;
     for (long i = 0; i < skip + n; i++) {
         float x = sinf(6.2831853f * freq * i / rate);

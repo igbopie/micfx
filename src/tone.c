@@ -1,8 +1,8 @@
-/* tone.c — test solo-playback: seno 440 Hz estéreo, cuenta xruns.
+/* tone.c — playback-only test: stereo 440 Hz sine, counts xruns.
  *
- * Uso: tone [-D hw:0,0] [-t segundos] [-r Hz] [-p period_frames]
- * Sale con el nº de xruns y CPU usada. Sirve de línea base antes
- * de tener hardware de captura.
+ * Usage: tone [-D hw:0,0] [-t seconds] [-r Hz] [-p period_frames]
+ * Exits with the xrun count and CPU used. Baseline check before
+ * capture hardware is available.
  */
 #define _POSIX_C_SOURCE 199309L
 #include <alloca.h>
@@ -31,7 +31,7 @@ int main(int argc, char **argv) {
         else if (!strcmp(argv[i], "-r") && i + 1 < argc) rate = atoi(argv[++i]);
         else if (!strcmp(argv[i], "-p") && i + 1 < argc) period = atoi(argv[++i]);
         else if (!strcmp(argv[i], "-l") && i + 1 < argc) latency_us = atoi(argv[++i]);
-        else { fprintf(stderr, "uso: %s [-D dev] [-t seg] [-r Hz] [-p frames] [-l latency_us]\n", argv[0]); return 2; }
+        else { fprintf(stderr, "usage: %s [-D dev] [-t sec] [-r Hz] [-p frames] [-l latency_us]\n", argv[0]); return 2; }
     }
 
     snd_pcm_t *pcm;

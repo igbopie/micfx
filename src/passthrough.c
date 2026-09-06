@@ -1,10 +1,12 @@
-/* micfx etapa 1 — passthrough estéreo con ganancias por canal + master.
+/* micfx — full DSP chain over ALSA full-duplex.
  *
- * Captura estéreo (L=mic1, R=mic2) -> aplica mic1_gain/mic2_gain/master_gain
- * -> playback. Lee ganancias de un fichero "clave valor" (-c).
+ * Stereo capture (L=mic1, R=mic2) -> per-channel chain
+ * (HPF -> comp -> EQ -> gain) -> mono mix -> reverb -> delay
+ * -> master -> limiter -> dual-mono playback.
+ * Reads parameters from a "key value" file (-c).
  *
- * Uso: micfx [-C cap_dev] [-P play_dev] [-c conf] [-r Hz] [-p period]
- * Formato: S16_LE estéreo. Sin allocations ni I/O en el loop.
+ * Usage: micfx [-C cap_dev] [-P play_dev] [-c conf] [-r Hz] [-p period]
+ * Format: stereo S16_LE. No allocations, no I/O in the loop.
  */
 #include <alloca.h>
 #include <alsa/asoundlib.h>
@@ -34,10 +36,10 @@ int main(int argc, char **argv) {
         else if (!strcmp(argv[i], "-c") && i + 1 < argc) conf = argv[++i];
         else if (!strcmp(argv[i], "-r") && i + 1 < argc) rate = atoi(argv[++i]);
         else if (!strcmp(argv[i], "-p") && i + 1 < argc) period = atoi(argv[++i]);
-        else { fprintf(stderr, "uso: %s [-C cap] [-P play] [-c conf] [-r Hz] [-p frames]\n", argv[0]); return 2; }
+        else { fprintf(stderr, "usage: %s [-C cap] [-P play] [-c conf] [-r Hz] [-p frames]\n", argv[0]); return 2; }
     }
     conf_defaults(&CF);
-    if (!conf_load(&CF, conf)) fprintf(stderr, "conf %s no encontrado, defaults\n", conf);
+    if (!conf_load(&CF, conf)) fprintf(stderr, "conf %s not found, using defaults\n", conf);
     conf_print(&CF);
 
     snd_pcm_t *cap, *play;
@@ -51,16 +53,16 @@ int main(int argc, char **argv) {
     snd_pcm_hw_params_get_period_size(hp, &bp, 0);
     printf("cap=%s play=%s rate=%u period=%lu\n", capd, playd, rate, (unsigned long)bp);
 
-    static int16_t buf[8192 * 2]; /* estático: sin malloc en el loop */
+    static int16_t buf[8192 * 2]; /* static: no malloc in the loop */
     chan_t ch1, ch2;
     float frate = (float)rate;
     chan_init(&ch1, CF.hpf, CF.c_thr, CF.c_ratio, CF.c_atk, CF.c_rel,
               CF.eq_low, CF.eq_mid, CF.eq_high, CF.mic1, frate);
     chan_init(&ch2, CF.hpf, CF.c_thr, CF.c_ratio, CF.c_atk, CF.c_rel,
               CF.eq_low, CF.eq_mid, CF.eq_high, CF.mic2, frate);
-    static reverb_t rev; /* ~115 KB estáticos: fuera del stack */
+    static reverb_t rev; /* ~115 KB static: kept off the stack */
     reverb_init(&rev, CF.rev_amt, frate);
-    static delay_t dly; /* ~190 KB estáticos */
+    static delay_t dly; /* ~190 KB static */
     delay_init(&dly, CF.dly_ms, CF.dly_fb, CF.dly_mix, frate);
     lim_t lim;
     lim_init(&lim, CF.lim_thr);
@@ -72,10 +74,10 @@ int main(int argc, char **argv) {
         for (snd_pcm_sframes_t i = 0; i < r; i++) {
             float l = chan_run(&ch1, buf[2 * i] / 32768.0f);
             float rr = chan_run(&ch2, buf[2 * i + 1] / 32768.0f);
-            float dry = (l + rr) * 0.5f; /* etapa 6: mezcla */
+            float dry = (l + rr) * 0.5f; /* stage 6: mix */
             float wet = reverb_wet(&rev, CF.rev_s1 * l + CF.rev_s2 * rr);
-            float echo = delay_run(&dly, dry + rev.amount * wet); /* etapa 8 */
-            float ol = lim_run(&lim, echo * CF.master); /* etapa 9: limiter */
+            float echo = delay_run(&dly, dry + rev.amount * wet); /* stage 8 */
+            float ol = lim_run(&lim, echo * CF.master); /* stage 9: limiter */
             float orr = ol;
             if (ol > 1.0f) ol = 1.0f;
             if (ol < -1.0f) ol = -1.0f;
