@@ -220,4 +220,44 @@ static inline float reverb_wet(reverb_t *r, float x) {
     return y;
 }
 
+/* Etapa 8: delay/echo mono (opcional). Línea con realimentación;
+ * buffer estático hasta 1 s @ 48 kHz. mix=0 = bypass.
+ */
+#define DLY_MAX 48000
+
+typedef struct {
+    float buf[DLY_MAX];
+    int len, idx;
+    float fb, mix;
+} delay_t;
+
+static inline void delay_init(delay_t *d, float ms, float fb, float mix, float rate) {
+    int len = (int)(ms * rate / 1000.0f);
+    if (len < 1) len = 1;
+    if (len > DLY_MAX) len = DLY_MAX;
+    d->len = len; d->idx = 0;
+    d->fb = fb; d->mix = mix;
+    for (int i = 0; i < d->len; i++) d->buf[i] = 0.0f;
+}
+
+static inline float delay_run(delay_t *d, float x) {
+    float e = d->buf[d->idx];
+    d->buf[d->idx] = x + e * d->fb;
+    if (++d->idx >= d->len) d->idx = 0;
+    return x * (1.0f - d->mix) + e * d->mix;
+}
+
+/* Etapa 9: limiter final brickwall. Recorta a ±umbral (lineal).
+ * Es la última etapa: seguridad anti-clip antes de la salida.
+ */
+typedef struct { float thr; } lim_t;
+
+static inline void lim_init(lim_t *l, float thr) { l->thr = thr; }
+
+static inline float lim_run(lim_t *l, float x) {
+    if (x > l->thr) return l->thr;
+    if (x < -l->thr) return -l->thr;
+    return x;
+}
+
 #endif

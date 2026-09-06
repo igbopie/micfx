@@ -17,6 +17,8 @@ static float g_mic1 = 1.0f, g_mic2 = 1.0f, g_master = 1.0f, g_hpf = 0.0f;
 static float g_c_thr = 1.0f, g_c_ratio = 1.0f, g_c_atk = 0.005f, g_c_rel = 0.100f;
 static float g_eq_low = 0.0f, g_eq_mid = 0.0f, g_eq_high = 0.0f;
 static float g_rev_s1 = 0.0f, g_rev_s2 = 0.0f, g_rev_amt = 0.0f;
+static float g_dly_ms = 0.0f, g_dly_fb = 0.0f, g_dly_mix = 0.0f;
+static float g_lim_thr = 1.0f;
 
 static void load_conf(const char *path) {
     FILE *f = fopen(path, "r");
@@ -38,12 +40,18 @@ static void load_conf(const char *path) {
         else if (!strcmp(k, "reverb_send_1")) g_rev_s1 = v;
         else if (!strcmp(k, "reverb_send_2")) g_rev_s2 = v;
         else if (!strcmp(k, "reverb_amount")) g_rev_amt = v;
+        else if (!strcmp(k, "delay_ms")) g_dly_ms = v;
+        else if (!strcmp(k, "delay_feedback")) g_dly_fb = v;
+        else if (!strcmp(k, "delay_mix")) g_dly_mix = v;
+        else if (!strcmp(k, "limiter_threshold")) g_lim_thr = v;
     }
     fclose(f);
     printf("gains: mic1=%.3f mic2=%.3f master=%.3f hpf=%.1f Hz comp=%.3f:%.1f atk=%.4f rel=%.3f\n",
            g_mic1, g_mic2, g_master, g_hpf,
            g_c_thr, g_c_ratio, g_c_atk, g_c_rel);
     printf("reverb: send1=%.2f send2=%.2f amount=%.2f\n", g_rev_s1, g_rev_s2, g_rev_amt);
+    printf("delay: %.1f ms fb=%.2f mix=%.2f | limiter: thr=%.3f\n",
+           g_dly_ms, g_dly_fb, g_dly_mix, g_lim_thr);
 }
 
 static int setup(snd_pcm_t **h, const char *dev, int cap, unsigned rate) {
@@ -88,6 +96,10 @@ int main(int argc, char **argv) {
               g_eq_low, g_eq_mid, g_eq_high, g_mic2, frate);
     static reverb_t rev; /* ~115 KB estáticos: fuera del stack */
     reverb_init(&rev, g_rev_amt, frate);
+    static delay_t dly; /* ~190 KB estáticos */
+    delay_init(&dly, g_dly_ms, g_dly_fb, g_dly_mix, frate);
+    lim_t lim;
+    lim_init(&lim, g_lim_thr);
     long xr_c = 0, xr_p = 0, total = 0;
     for (;;) {
         snd_pcm_sframes_t r = snd_pcm_readi(cap, buf, bp);
@@ -98,7 +110,8 @@ int main(int argc, char **argv) {
             float rr = chan_run(&ch2, buf[2 * i + 1] / 32768.0f);
             float dry = (l + rr) * 0.5f; /* etapa 6: mezcla */
             float wet = reverb_wet(&rev, g_rev_s1 * l + g_rev_s2 * rr);
-            float ol = (dry + rev.amount * wet) * g_master;
+            float echo = delay_run(&dly, dry + rev.amount * wet); /* etapa 8 */
+            float ol = lim_run(&lim, echo * g_master); /* etapa 9: limiter */
             float orr = ol;
             if (ol > 1.0f) ol = 1.0f;
             if (ol < -1.0f) ol = -1.0f;
