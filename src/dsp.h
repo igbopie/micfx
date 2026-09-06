@@ -8,7 +8,7 @@
 
 typedef struct {
     float b0, b1, b2, a1, a2; /* a0 normalized to 1 */
-    float x1, x2, y1, y2;     /* estado */
+    float x1, x2, y1, y2;     /* state */
 } hpf_t;
 
 static inline void hpf_init(hpf_t *f, float fc_hz, float rate_hz) {
