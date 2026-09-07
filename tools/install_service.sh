@@ -18,7 +18,10 @@ echo "=== micfx service ==="
 pkill -x micfx || true
 install -m 755 src/micfx /usr/local/bin/micfx
 install -d -m 755 /etc/micfx
-install -m 644 config/micfx.conf /etc/micfx/micfx.conf
+# Keep knob-tuned values: only seed the config if missing, and let the
+# service (running as igbopie) save back live changes.
+cp -n config/micfx.conf /etc/micfx/micfx.conf || true
+chown igbopie:igbopie /etc/micfx/micfx.conf
 install -m 644 systemd/micfx.service /etc/systemd/system/micfx.service
 systemctl daemon-reload
 systemctl enable --now micfx.service

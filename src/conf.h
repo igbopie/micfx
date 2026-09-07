@@ -58,6 +58,26 @@ static inline int conf_load(conf_t *c, const char *path) {
     return 1;
 }
 
+/* Writes all keys (knob-tunable state persists across reboots). */
+static inline int conf_save(const conf_t *c, const char *path) {
+    FILE *f = fopen(path, "w");
+    if (!f) return 0;
+    fprintf(f, "mic1_gain %f\nmic2_gain %f\n", c->mic1, c->mic2);
+    fprintf(f, "hpf_frequency %f\n", c->hpf);
+    fprintf(f, "compressor_threshold %f\ncompressor_ratio %f\n",
+            c->c_thr, c->c_ratio);
+    fprintf(f, "compressor_attack %f\ncompressor_release %f\n", c->c_atk, c->c_rel);
+    fprintf(f, "eq_low %f\neq_mid %f\neq_high %f\n", c->eq_low, c->eq_mid, c->eq_high);
+    fprintf(f, "reverb_send_1 %f\nreverb_send_2 %f\nreverb_amount %f\n",
+            c->rev_s1, c->rev_s2, c->rev_amt);
+    fprintf(f, "delay_ms %f\ndelay_feedback %f\ndelay_mix %f\n",
+            c->dly_ms, c->dly_fb, c->dly_mix);
+    fprintf(f, "master_gain %f\nlimiter_threshold %f\n", c->master, c->lim_thr);
+    fprintf(f, "music_gain %f\n", c->music);
+    fclose(f);
+    return 1;
+}
+
 static inline void conf_print(const conf_t *c) {
     printf("gains: mic1=%.3f mic2=%.3f master=%.3f hpf=%.1f Hz comp=%.3f:%.1f atk=%.4f rel=%.3f\n",
            c->mic1, c->mic2, c->master, c->hpf,

@@ -34,8 +34,8 @@ test_lim: test_lim.c dsp.h
 tone: tone.c
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $< $(LDLIBS)
 
-micfx: passthrough.c
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $< $(LDLIBS)
+micfx: passthrough.c dsp.h conf.h pins.h lcd.h
+	$(CC) $(CFLAGS) $(LDFLAGS) -pthread -o $@ $< $(LDLIBS) -lgpiod
 
 clean:
 	rm -f tone micfx bench filefx test_hpf test_comp test_eq test_mix test_rev test_dly test_lim

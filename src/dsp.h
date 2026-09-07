@@ -11,7 +11,8 @@ typedef struct {
     float x1, x2, y1, y2;     /* state */
 } hpf_t;
 
-static inline void hpf_init(hpf_t *f, float fc_hz, float rate_hz) {
+/* hpf_set retunes without touching state: live-knob safe. */
+static inline void hpf_set(hpf_t *f, float fc_hz, float rate_hz) {
     float w0 = 6.283185307179586f * fc_hz / rate_hz;
     float c = cosf(w0), s = sinf(w0);
     float alpha = s / 2.0f / 0.70710678f;
@@ -19,6 +20,10 @@ static inline void hpf_init(hpf_t *f, float fc_hz, float rate_hz) {
     float a0 = 1.0f + alpha, a1 = -2.0f * c, a2 = 1.0f - alpha;
     f->b0 = b0 / a0; f->b1 = b1 / a0; f->b2 = b2 / a0;
     f->a1 = a1 / a0; f->a2 = a2 / a0;
+}
+
+static inline void hpf_init(hpf_t *f, float fc_hz, float rate_hz) {
+    hpf_set(f, fc_hz, rate_hz);
     f->x1 = f->x2 = f->y1 = f->y2 = 0.0f;
 }
 
@@ -66,10 +71,16 @@ typedef struct {
     float x1, x2, y1, y2;
 } bq_t;
 
-static inline void bq_norm(bq_t *f, float b0, float b1, float b2,
-                           float a0, float a1, float a2) {
+/* bq_coefs retunes without touching state: live-knob safe. */
+static inline void bq_coefs(bq_t *f, float b0, float b1, float b2,
+                            float a0, float a1, float a2) {
     f->b0 = b0 / a0; f->b1 = b1 / a0; f->b2 = b2 / a0;
     f->a1 = a1 / a0; f->a2 = a2 / a0;
+}
+
+static inline void bq_norm(bq_t *f, float b0, float b1, float b2,
+                           float a0, float a1, float a2) {
+    bq_coefs(f, b0, b1, b2, a0, a1, a2);
     f->x1 = f->x2 = f->y1 = f->y2 = 0.0f;
 }
 
@@ -79,7 +90,7 @@ static inline void bq_low_shelf(bq_t *f, float fc, float db, float rate) {
     float c = cosf(w0), s = sinf(w0);
     float alpha = s / 2.0f * sqrtf(2.0f); /* S=1 */
     float sqA = sqrtf(A);
-    bq_norm(f, A * ((A + 1) - (A - 1) * c + 2 * sqA * alpha),
+    bq_coefs(f, A * ((A + 1) - (A - 1) * c + 2 * sqA * alpha),
                2 * A * ((A - 1) - (A + 1) * c),
                A * ((A + 1) - (A - 1) * c - 2 * sqA * alpha),
                (A + 1) + (A - 1) * c + 2 * sqA * alpha,
@@ -93,7 +104,7 @@ static inline void bq_high_shelf(bq_t *f, float fc, float db, float rate) {
     float c = cosf(w0), s = sinf(w0);
     float alpha = s / 2.0f * sqrtf(2.0f); /* S=1 */
     float sqA = sqrtf(A);
-    bq_norm(f, A * ((A + 1) + (A - 1) * c + 2 * sqA * alpha),
+    bq_coefs(f, A * ((A + 1) + (A - 1) * c + 2 * sqA * alpha),
                -2 * A * ((A - 1) + (A + 1) * c),
                A * ((A + 1) + (A - 1) * c - 2 * sqA * alpha),
                (A + 1) - (A - 1) * c + 2 * sqA * alpha,
@@ -106,7 +117,7 @@ static inline void bq_peak(bq_t *f, float fc, float db, float Q, float rate) {
     float w0 = 6.283185307179586f * fc / rate;
     float c = cosf(w0), s = sinf(w0);
     float alpha = s / 2.0f / Q;
-    bq_norm(f, 1 + alpha * A, -2 * c, 1 - alpha * A,
+    bq_coefs(f, 1 + alpha * A, -2 * c, 1 - alpha * A,
                1 + alpha / A, -2 * c, 1 - alpha / A);
 }
 
@@ -120,11 +131,20 @@ static inline float bq_run(bq_t *f, float x) {
 
 typedef struct { bq_t low, mid, high; } eq3_t;
 
-static inline void eq3_init(eq3_t *e, float low_db, float mid_db,
-                            float high_db, float rate) {
+/* eq3_set retunes without touching state: live-knob safe. */
+static inline void eq3_set(eq3_t *e, float low_db, float mid_db,
+                           float high_db, float rate) {
     bq_low_shelf(&e->low, 250.0f, low_db, rate);
     bq_peak(&e->mid, 1000.0f, mid_db, 1.0f, rate);
     bq_high_shelf(&e->high, 4000.0f, high_db, rate);
+}
+
+static inline void eq3_init(eq3_t *e, float low_db, float mid_db,
+                            float high_db, float rate) {
+    eq3_set(e, low_db, mid_db, high_db, rate);
+    e->low.x1 = e->low.x2 = e->low.y1 = e->low.y2 = 0.0f;
+    e->mid.x1 = e->mid.x2 = e->mid.y1 = e->mid.y2 = 0.0f;
+    e->high.x1 = e->high.x2 = e->high.y1 = e->high.y2 = 0.0f;
 }
 
 static inline float eq3_run(eq3_t *e, float x) {
@@ -157,6 +177,24 @@ static inline float chan_run(chan_t *ch, float x) {
     x = comp_run(&ch->comp, x);
     x = eq3_run(&ch->eq, x);
     return x * ch->gain;
+}
+
+/* chan_sync pushes knob-editable params into a running channel.
+ * No state is cleared: live-knob safe. Call once per block. */
+static inline void chan_sync(chan_t *ch, float hpf_hz,
+                             float c_thr, float c_ratio,
+                             float c_atk, float c_rel,
+                             float eq_low, float eq_mid, float eq_high,
+                             float gain, float rate) {
+    if (c_atk < 1e-4f) c_atk = 1e-4f;
+    if (c_rel < 1e-4f) c_rel = 1e-4f;
+    ch->use_hpf = hpf_hz > 0.0f;
+    if (ch->use_hpf) hpf_set(&ch->hpf, hpf_hz, rate);
+    ch->comp.thresh = c_thr; ch->comp.ratio = c_ratio;
+    ch->comp.atk = 1.0f - expf(-1.0f / (c_atk * rate));
+    ch->comp.rel = 1.0f - expf(-1.0f / (c_rel * rate));
+    eq3_set(&ch->eq, eq_low, eq_mid, eq_high, rate);
+    ch->gain = gain;
 }
 
 /* Stage 6: dual-mono mix — both outputs = average, with master. */
@@ -238,6 +276,14 @@ static inline void delay_init(delay_t *d, float ms, float fb, float mix, float r
     d->len = len; d->idx = 0;
     d->fb = fb; d->mix = mix;
     for (int i = 0; i < d->len; i++) d->buf[i] = 0.0f;
+}
+
+/* delay_set_time changes echo time without clearing audio. */
+static inline void delay_set_time(delay_t *d, float ms, float rate) {
+    int len = (int)(ms * rate / 1000.0f);
+    if (len < 1) len = 1;
+    if (len > DLY_MAX) len = DLY_MAX;
+    if (len != d->len) { d->len = len; d->idx %= len; }
 }
 
 static inline float delay_run(delay_t *d, float x) {
